@@ -61,15 +61,12 @@ from six.moves.urllib.error import HTTPError
 from six.moves.urllib.error import URLError
 from six.moves.urllib.parse import quote, urlencode, urljoin, urlparse
 from six.moves.urllib.request import Request, install_opener, build_opener, urlopen
-
 from jenkins import plugins
 
 try:
-    import kerberos
-    assert kerberos  # pyflakes
-    from jenkins import urllib_kerb
+    from jenkins import urllib_certificate
     opener = build_opener()
-    opener.add_handler(urllib_kerb.HTTPNegotiateHandler())
+    opener.add_handler(urllib_certificate.HTTPSClientAuthHandler())
     install_opener(opener)
 except ImportError:
     pass
@@ -273,7 +270,7 @@ class Jenkins(object):
             self.server = url
         else:
             self.server = url + '/'
-        if username is not None and password is not None:
+        if username is not None and username != "JENKINS_USER" and password is not None and password != "JENKINS_PASS":
             self.auth = auth_headers(username, password)
         else:
             self.auth = None
