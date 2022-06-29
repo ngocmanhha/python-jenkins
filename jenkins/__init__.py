@@ -67,9 +67,20 @@ import xml.etree.ElementTree as ET
 from jenkins import plugins
 
 try:
-    import requests_kerberos
+    CLIENT_CERT = os.getenv('CLIENT_CERT')
+    CA_BUNDLE = os.getenv('REQUESTS_CA_BUNDLE', '/etc/ssl/certs/ca-bundle.crt')
+    JENKINS_URL = os.getenv('JENKINS_URL', "")
+    matched = re.search("https://localhost", JENKINS_URL)
+
+    session = requests.Session()
+    if matched:
+        CLIENT_CERT = ""
+        CA_BUNDLE = False
+
+    session.cert = CLIENT_CERT
+    session.verify = CA_BUNDLE
 except ImportError:
-    requests_kerberos = None
+    session = None
 
 # Set default logging handler to avoid "No handler found" warnings.
 try:  # Python 2.7+
@@ -297,7 +308,8 @@ class Jenkins(object):
     _timeout_warning_issued = False
 
     def __init__(self, url, username=None, password=None,
-                 timeout=socket._GLOBAL_DEFAULT_TIMEOUT):
+                 timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
+                 retries=0, retry_wait=5):
         '''Create handle to Jenkins instance.
 
         All methods will raise :class:`JenkinsException` on failure.
@@ -305,6 +317,8 @@ class Jenkins(object):
         :param url: URL of Jenkins server, ``str``
         :param username: Server username, ``str``
         :param password: Server password, ``str``
+        :param retries: Number of retries on failed requests, ``int``
+        :param retry_wait: Delay between retries, ``float``
         :param timeout: Server connection timeout in secs (default: not set), ``int``
         '''
         if url[-1] == '/':
@@ -314,22 +328,21 @@ class Jenkins(object):
 
         self._auths = [('anonymous', None)]
         self._auth_resolved = False
-        if username is not None and password is not None:
+        if session is None and username is not None and password is not None:
             self._auths[0] = (
                 'basic',
                 requests.auth.HTTPBasicAuth(
                     username.encode('utf-8'), password.encode('utf-8'))
             )
 
-        if requests_kerberos is not None:
-            self._auths.append(
-                ('kerberos', requests_kerberos.HTTPKerberosAuth())
-            )
-
         self.auth = None
         self.crumb = None
         self.timeout = timeout
+        self.retries = retries
+        self.retry_wait = retry_wait
         self._session = WrappedSession()
+        self._session.cert = session.cert
+        self._session.verify = session.verify
 
         extra_headers = os.environ.get("JENKINS_API_EXTRA_HEADERS", "")
         if extra_headers:
@@ -573,37 +586,44 @@ class Jenkins(object):
                              ``True``.
         :returns: A ``requests.Response`` object.
         '''
-        try:
-            if resolve_auth:
-                self._maybe_add_auth()
-            if add_crumb:
-                self.maybe_add_crumb(req)
+        attempts = self.retries + 1
+        while attempts > 0:
+            attempts -= 1
+            try:
+                if resolve_auth:
+                    self._maybe_add_auth()
+                if add_crumb:
+                    self.maybe_add_crumb(req)
 
-            return self._response_handler(
-                self._request(req))
+                return self._response_handler(
+                    self._request(req))
 
-        except req_exc.HTTPError as e:
-            # Jenkins's funky authentication means its nigh impossible to
-            # distinguish errors.
-            if e.response.status_code in [401, 403, 500]:
-                msg = 'Error in request. ' + \
-                      'Possibly authentication failed [%s]: %s' % (
-                          e.response.status_code, e.response.reason)
-                if e.response.text:
-                    msg += '\n' + e.response.text
-                raise JenkinsException(msg)
-            elif e.response.status_code == 404:
-                raise NotFoundException('Requested item could not be found')
-            else:
-                raise
-        except req_exc.Timeout as e:
-            raise TimeoutException('Error in request: %s' % (e))
-        except URLError as e:
-            # python 2.6 compatibility to ensure same exception raised
-            # since URLError wraps a socket timeout on python 2.6.
-            if str(e.reason) == "timed out":
-                raise TimeoutException('Error in request: %s' % (e.reason))
-            raise JenkinsException('Error in request: %s' % (e.reason))
+            except req_exc.HTTPError as e:
+                # Jenkins's funky authentication means its nigh impossible to
+                # distinguish errors.
+                if e.response.status_code in [401, 403, 500]:
+                    msg = 'Error in request. ' + \
+                        'Possibly authentication failed [%s]: %s' % (
+                            e.response.status_code, e.response.reason)
+                    if e.response.text:
+                        msg += '\n' + e.response.text
+                    raise JenkinsException(msg)
+                elif e.response.status_code == 404:
+                    raise NotFoundException('Requested item could not be found')
+                elif e.response.status_code >= 500:
+                    if attempts == 0:
+                        raise
+                else:
+                    raise
+            except req_exc.Timeout as e:
+                raise TimeoutException('Error in request: %s' % (e))
+            except URLError as e:
+                # python 2.6 compatibility to ensure same exception raised
+                # since URLError wraps a socket timeout on python 2.6.
+                if str(e.reason) == "timed out":
+                    raise TimeoutException('Error in request: %s' % (e.reason))
+                raise JenkinsException('Error in request: %s' % (e.reason))
+            time.sleep(self.retry_wait)
 
     def get_queue_item(self, number, depth=0):
         '''Get information about a queued item (to-be-created job).
