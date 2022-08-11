@@ -68,6 +68,7 @@ from jenkins import plugins
 
 try:
     CLIENT_CERT = os.getenv('CLIENT_CERT')
+    CLIENT_KEY = os.getenv('CLIENT_KEY')
     CA_BUNDLE = os.getenv('REQUESTS_CA_BUNDLE', '/etc/ssl/certs/ca-bundle.crt')
     JENKINS_URL = os.getenv('JENKINS_URL', "")
     matched = re.search("https://localhost", JENKINS_URL)
@@ -77,8 +78,8 @@ try:
         CLIENT_CERT = ""
         CA_BUNDLE = False
 
-    session.cert = CLIENT_CERT
-    session.verify = CA_BUNDLE
+    session.cert = (CLIENT_CERT, CLIENT_KEY)
+    session.verify = False
 except ImportError:
     session = None
 
