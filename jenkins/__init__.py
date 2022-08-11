@@ -66,21 +66,19 @@ import xml.etree.ElementTree as ET
 
 from jenkins import plugins
 
+session = None
 try:
     CLIENT_CERT = os.getenv('CLIENT_CERT')
     CA_BUNDLE = os.getenv('REQUESTS_CA_BUNDLE', '/etc/ssl/certs/ca-bundle.crt')
     JENKINS_URL = os.getenv('JENKINS_URL', "")
-    matched = re.search("https://localhost", JENKINS_URL)
+    matched = re.search("localhost", JENKINS_URL)
 
-    session = requests.Session()
-    if matched:
-        CLIENT_CERT = ""
-        CA_BUNDLE = False
-
-    session.cert = CLIENT_CERT
-    session.verify = CA_BUNDLE
+    if not matched:
+        session = requests.Session()
+        session.cert = CLIENT_CERT
+        session.verify = CA_BUNDLE
 except ImportError:
-    session = None
+    pass
 
 # Set default logging handler to avoid "No handler found" warnings.
 try:  # Python 2.7+
@@ -341,8 +339,12 @@ class Jenkins(object):
         self.retries = retries
         self.retry_wait = retry_wait
         self._session = WrappedSession()
-        self._session.cert = session.cert
-        self._session.verify = session.verify
+        if session:
+            self._session.cert = session.cert
+            if re.search("cing-dev", self.server):
+                self._session.verify = False
+            else:
+                self._session.verify = session.verify
 
         extra_headers = os.environ.get("JENKINS_API_EXTRA_HEADERS", "")
         if extra_headers:
