@@ -79,7 +79,7 @@ try:
         CA_BUNDLE = False
 
     session.cert = (CLIENT_CERT, CLIENT_KEY)
-    session.verify = CA_BUNDLE
+    session.verify = False
 except ImportError:
     session = None
 
