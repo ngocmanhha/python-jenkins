@@ -100,7 +100,7 @@ try:
 
     session = requests.Session()
     session.cert = (CLIENT_CERT, CLIENT_KEY)
-    session.verify = False
+    session.verify = CA_BUNDLE
 except ImportError:
     session = None
 
