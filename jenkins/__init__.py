@@ -99,8 +99,6 @@ try:
         CA_BUNDLE = False
 
     session = requests.Session()
-    adapter = TlsAdapter(ssl.OP_NO_TLSv1_3)
-    session.mount("https://", adapter)
     session.cert = (CLIENT_CERT, CLIENT_KEY)
     session.verify = False
 except ImportError:
@@ -367,6 +365,9 @@ class Jenkins(object):
         self._session = WrappedSession()
         self._session.cert = session.cert
         self._session.verify = session.verify
+
+        adapter = TlsAdapter(ssl.OP_NO_TLSv1_3)
+        self._session.mount("https://", adapter)
 
         extra_headers = os.environ.get("JENKINS_API_EXTRA_HEADERS", "")
         if extra_headers:
