@@ -90,7 +90,6 @@ class TlsAdapter(HTTPAdapter):
 try:
     CLIENT_CERT = os.getenv('CLIENT_CERT')
     CLIENT_KEY = os.getenv('CLIENT_KEY')
-    CA_BUNDLE = os.getenv('REQUESTS_CA_BUNDLE', '/etc/ssl/certs/ca-bundle.crt')
     JENKINS_URL = os.getenv('JENKINS_URL', "")
     matched = re.search("https://localhost", JENKINS_URL)
 
@@ -100,7 +99,6 @@ try:
 
     session = requests.Session()
     session.cert = (CLIENT_CERT, CLIENT_KEY)
-    session.verify = CA_BUNDLE
 except ImportError:
     session = None
 
