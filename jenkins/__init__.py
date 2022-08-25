@@ -93,11 +93,11 @@ try:
     JENKINS_URL = os.getenv('JENKINS_URL', "")
     matched = re.search("https://localhost", JENKINS_URL)
 
+    session = requests.Session()
     if matched:
         CLIENT_CERT = ""
-        CA_BUNDLE = False
+        session.verify = False
 
-    session = requests.Session()
     session.cert = (CLIENT_CERT, CLIENT_KEY)
 except ImportError:
     session = None
