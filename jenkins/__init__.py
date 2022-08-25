@@ -95,10 +95,9 @@ try:
 
     session = requests.Session()
     if matched:
-        CLIENT_CERT = ""
         session.verify = False
-
-    session.cert = (CLIENT_CERT, CLIENT_KEY)
+    else:
+        session.cert = (CLIENT_CERT, CLIENT_KEY)
 except ImportError:
     session = None
 
