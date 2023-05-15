@@ -59,6 +59,7 @@ import multi_key_dict
 import ssl
 import requests
 import requests.exceptions as req_exc
+import urllib3.util.timeout
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.poolmanager import PoolManager
@@ -83,6 +84,7 @@ class TlsAdapter(HTTPAdapter):
 
     def init_poolmanager(self, *pool_args, **pool_kwargs):
         ctx = ssl_.create_urllib3_context(ciphers=CIPHERS, cert_reqs=ssl.CERT_REQUIRED, options=self.ssl_options)
+        ctx.check_hostname = False
         self.poolmanager = PoolManager(*pool_args,
                                        ssl_context=ctx,
                                        **pool_kwargs)
@@ -121,6 +123,7 @@ LAUNCHER_COMMAND = 'hudson.slaves.CommandLauncher'
 LAUNCHER_JNLP = 'hudson.slaves.JNLPLauncher'
 LAUNCHER_WINDOWS_SERVICE = 'hudson.os.windows.ManagedWindowsServiceLauncher'
 DEFAULT_HEADERS = {'Content-Type': 'text/xml; charset=utf-8'}
+DEFAULT_TIMEOUT = getattr(urllib3.util.timeout, '_DEFAULT_TIMEOUT', socket._GLOBAL_DEFAULT_TIMEOUT)
 
 # REST Endpoints
 INFO = 'api/json'
@@ -327,7 +330,7 @@ class Jenkins(object):
     _timeout_warning_issued = False
 
     def __init__(self, url, username=None, password=None,
-                 timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
+                 timeout=DEFAULT_TIMEOUT,
                  retries=0, retry_wait=5):
         '''Create handle to Jenkins instance.
 
@@ -2188,7 +2191,7 @@ class Jenkins(object):
             raise ValueError("Timeout must be >= 0 not %d" % timeout)
 
         if (not self._timeout_warning_issued and
-                self.timeout != socket._GLOBAL_DEFAULT_TIMEOUT and
+                self.timeout != DEFAULT_TIMEOUT and
                 timeout < self.timeout):
             warnings.warn("Requested timeout to wait for jenkins to resume "
                           "normal operations is less than configured "
